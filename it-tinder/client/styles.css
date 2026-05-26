@@ -562,3 +562,29 @@ a { text-decoration: none; }
 
 /* ===== ADMIN PANEL CONTAINER ===== */
 .admin-container { width: 100%; max-width: 32rem; }
+
+/* ===== MEDIA QUERIES ===== */
+@media (max-width: 768px) {
+  .card, .card--sm, .card--lg { max-width: 100%; padding: 1.5rem; }
+  .title { font-size: 1.5rem; }
+  .title--lg { font-size: 1.75rem; }
+  .job-card { width: 280px; height: 380px; }
+  .swipe-card { width: 100%; }
+  .card-stack { max-width: 100%; height: 380px; }
+  .modal { max-width: 100%; max-height: 85vh; padding: 1rem; }
+  .header-bar { top: 0.5rem; right: 0.5rem; }
+  .page-top { padding: 1.5rem 0.5rem; }
+  .admin-container { padding: 0 0.5rem; }
+}
+
+@media (max-width: 480px) {
+  body { font-size: 14px; }
+  .job-card { width: 260px; height: 360px; }
+  .card-stack { height: 370px; }
+  .btn-primary { padding: 0.65rem 1rem; font-size: 0.8rem; }
+  .modal__header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+  .saved-item { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+  .saved-item__actions { width: 100%; justify-content: flex-end; }
+  .checkbox-list { gap: 0.5rem; }
+  .checkbox-item { padding: 0.5rem 0.75rem; }
+}

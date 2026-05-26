@@ -149,6 +149,45 @@ app.post('/api/swipes', authenticateToken, async (req, res) => {
   }
 });
 
+// Historia swipe'y z JOIN (admin)
+app.get('/api/swipes/history', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const rows = await db.all(`
+      SELECT swipes.id, swipes.status, swipes.user_id,
+             users.email AS user_email,
+             jobs.title AS job_title, jobs.company AS job_company
+      FROM swipes
+      JOIN users ON swipes.user_id = users.id
+      JOIN jobs ON swipes.job_id = jobs.id
+      ORDER BY swipes.id DESC
+    `);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Błąd serwera.' });
+  }
+});
+
+// Integracja z zewnętrznym API Remotive
+app.get('/api/external/jobs', async (req, res) => {
+  try {
+    const remote = await fetch(
+      'https://remotive.com/api/remote-jobs?category=software-dev&limit=10'
+    );
+    if (!remote.ok) throw new Error(`HTTP ${remote.status}`);
+    const data = await remote.json();
+    const jobs = (data.jobs || []).map((j) => ({
+      id: j.id,
+      title: j.title,
+      company: j.company_name,
+      technologies: (j.tags || []).slice(0, 5),
+      link: j.url,
+    }));
+    res.json(jobs);
+  } catch (err) {
+    res.status(502).json({ error: 'Nie udało się pobrać danych z Remotive API.' });
+  }
+});
+
 // Kompatybilny endpoint dla frontendu – odczyt ofert z pliku JSON (bez autoryzacji)
 app.get('/api/oferty', (req, res) => {
   const filePath = path.join(__dirname, 'oferty.json');

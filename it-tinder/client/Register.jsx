@@ -8,8 +8,16 @@ export default function Register({ onSwitch }) {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const validate = () => {
+    if (!email.includes('@') || !email.includes('.')) return 'Podaj prawidłowy adres email.';
+    if (password.length < 6) return 'Hasło musi mieć co najmniej 6 znaków.';
+    return null;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const err = validate();
+    if (err) { setError(err); return; }
     setError('');
     setSuccess('');
     setLoading(true);
