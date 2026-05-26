@@ -1,7 +1,5 @@
 # PROJEKT_LABY – IT Tinder
 
-Projekt zaliczeniowy z przedmiotu **Programowanie Aplikacji Internetowych**.
-
 Aplikacja webowa w stylu Tindera, ale do ofert pracy IT – przesuwasz w prawo, żeby zapisać ofertę,
 w lewo, żeby pominąć. Filtrujesz po technologiach, logujesz się, a admin zarządza użytkownikami i ofertami.
 
@@ -18,7 +16,7 @@ PROJEKT_LABY/
     └── tests/    # Testy jednostkowe API
 ```
 
-## Szybki start
+## start
 
 ```bash
 cd it-tinder
@@ -39,4 +37,4 @@ npm run dev
 
 Pełna instrukcja, opis API i struktury: [`it-tinder/README.md`](./it-tinder/README.md).
 
-Dokumentacja techniczna do oddania: [`it-tinder/DOKUMENTACJA.md`](./it-tinder/DOKUMENTACJA.md).
+Dokumentacja: [`it-tinder/DOKUMENTACJA.md`](./it-tinder/DOKUMENTACJA.md).
