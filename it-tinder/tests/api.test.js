@@ -1,11 +1,13 @@
-// Prosty test API – uruchom gdy backend działa na porcie 3000
-// node tests/api.test.js
+// testy API - musi byc odpalony backend na porcie 3000 zeby przeszly
+// odpalasz: npm test (z roota it-tinder/)
 
 const BASE = 'http://localhost:3000';
+// losowy email zeby kazde uruchomienie testow nie zapychalo bazy duplikatami
 const testEmail = `test${Date.now()}@test.pl`;
 let passed = 0;
 let failed = 0;
 
+// prosty helper - wypisuje OK albo blad i zlicza wyniki
 async function test(name, fn) {
   try {
     await fn();
@@ -20,7 +22,7 @@ async function test(name, fn) {
 async function main() {
   console.log('Testy API IT Tinder\n');
 
-  // Test: rejestracja
+  // sprawdzam czy mozna sie zarejestrowac (status 201)
   await test('POST /api/auth/register – rejestracja', async () => {
     const res = await fetch(`${BASE}/api/auth/register`, {
       method: 'POST',
@@ -31,7 +33,7 @@ async function main() {
     if (res.status !== 201) throw new Error(data.error || `status ${res.status}`);
   });
 
-  // Test: logowanie
+  // logowanie - po nim zapisuje token do dalszych testow
   let token;
   await test('POST /api/auth/login – logowanie', async () => {
     const res = await fetch(`${BASE}/api/auth/login`, {
@@ -45,27 +47,27 @@ async function main() {
     token = data.token;
   });
 
-  // Test: oferty JSON
+  // czy oferty z JSON-a sie pobieraja
   await test('GET /api/oferty – lista ofert', async () => {
     const res = await fetch(`${BASE}/api/oferty`);
     if (res.status !== 200) throw new Error(`status ${res.status}`);
     const data = await res.json();
-    if (!Array.isArray(data)) throw new Error('odpowiedź nie jest tablicą');
+    if (!Array.isArray(data)) throw new Error('odpowiedz nie jest tablica');
   });
 
-  // Test: oferty z filtrowaniem
+  // filtrowanie po techu - tu tylko sprawdzam ze nie wybucha
   await test('GET /api/oferty?tech=aws – filtrowanie', async () => {
     const res = await fetch(`${BASE}/api/oferty?tech=aws`);
     if (res.status !== 200) throw new Error(`status ${res.status}`);
   });
 
-  // Test: chroniony endpoint bez tokena
+  // chroniony endpoint - bez tokena ma rzucic 401
   await test('GET /api/jobs – brak autoryzacji = 401', async () => {
     const res = await fetch(`${BASE}/api/jobs`);
-    if (res.status !== 401) throw new Error(`oczekiwano 401, dostałem ${res.status}`);
+    if (res.status !== 401) throw new Error(`oczekiwano 401, dostalem ${res.status}`);
   });
 
-  // Test: chroniony endpoint z tokenem
+  // ten sam endpoint z tokenem - powinno przejsc
   await test('GET /api/jobs – z tokenem', async () => {
     const res = await fetch(`${BASE}/api/jobs`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -73,34 +75,35 @@ async function main() {
     if (res.status !== 200) throw new Error(`status ${res.status}`);
   });
 
-  // Test: endpoint z JOIN (wymaga admina – sprawdzamy czy blokuje)
+  // historia swipy - tylko admin moze, zwykly user dostaje 403
   await test('GET /api/swipes/history – bez admina = 403', async () => {
     const res = await fetch(`${BASE}/api/swipes/history`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (res.status !== 403) throw new Error(`oczekiwano 403, dostałem ${res.status}`);
+    if (res.status !== 403) throw new Error(`oczekiwano 403, dostalem ${res.status}`);
   });
 
-  // Test: zewnętrzne API Remotive
+  // sprawdzam czy zewnetrzne api Remotive odpowiada
   await test('GET /api/external/jobs – Remotive', async () => {
     const res = await fetch(`${BASE}/api/external/jobs`);
     if (res.status !== 200) throw new Error(`status ${res.status}`);
     const data = await res.json();
-    if (!Array.isArray(data)) throw new Error('odpowiedź nie jest tablicą');
-    if (data.length === 0) throw new Error('pusta odpowiedź z API');
+    if (!Array.isArray(data)) throw new Error('odpowiedz nie jest tablica');
+    if (data.length === 0) throw new Error('pusta odpowiedz z API');
   });
 
-  // Test: walidacja – brakujące pola
+  // walidacja po stronie servera - bez hasla ma byc 400
   await test('POST /api/auth/register – brak hasła = 400', async () => {
     const res = await fetch(`${BASE}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'x@x.pl' }),
     });
-    if (res.status !== 400) throw new Error(`oczekiwano 400, dostałem ${res.status}`);
+    if (res.status !== 400) throw new Error(`oczekiwano 400, dostalem ${res.status}`);
   });
 
-  console.log(`\nWyniki: ${passed} zaliczone, ${failed} błędów`);
+  console.log(`\nWyniki: ${passed} zaliczone, ${failed} bledow`);
+  // jak cos sie wyjebalo to exit 1 zeby CI sie wywalil
   if (failed > 0) process.exit(1);
 }
 
