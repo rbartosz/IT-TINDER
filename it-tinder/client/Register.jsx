@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
 export default function Register({ onSwitch }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -9,7 +11,7 @@ export default function Register({ onSwitch }) {
   const [loading, setLoading] = useState(false);
 
   const validate = () => {
-    if (!email.includes('@') || !email.includes('.')) return 'Podaj prawidłowy adres email.';
+    if (!EMAIL_REGEX.test(email)) return 'Podaj prawidłowy adres email.';
     if (password.length < 6) return 'Hasło musi mieć co najmniej 6 znaków.';
     return null;
   };
@@ -32,29 +34,38 @@ export default function Register({ onSwitch }) {
   };
 
   return (
-    <div className="page-center">
-      <div className="card card--sm">
-        <h1 className="title">🔥 IT Tinder</h1>
-        <p className="subtitle">Rejestracja</p>
+    <main className="page-center">
+      <section className="card card--sm" aria-labelledby="register-title">
+        <header>
+          <h1 id="register-title" className="title">🔥 IT Tinder</h1>
+          <p className="subtitle">Rejestracja</p>
+        </header>
 
-        {error && <p className="alert-error">{error}</p>}
-        {success && <p className="alert-success">{success}</p>}
+        {error && <p className="alert-error" role="alert">{error}</p>}
+        {success && <p className="alert-success" role="status">{success}</p>}
 
-        <form onSubmit={handleSubmit} className="form-stack">
+        <form onSubmit={handleSubmit} className="form-stack" noValidate>
+          <label htmlFor="register-email" className="visually-hidden">Email</label>
           <input
+            id="register-email"
             type="email"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            autoComplete="email"
             className="input"
           />
+          <label htmlFor="register-password" className="visually-hidden">Hasło</label>
           <input
+            id="register-password"
             type="password"
-            placeholder="Hasło"
+            placeholder="Hasło (min. 6 znaków)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            minLength={6}
+            autoComplete="new-password"
             className="input"
           />
           <button type="submit" disabled={loading} className="btn-primary">
@@ -62,11 +73,13 @@ export default function Register({ onSwitch }) {
           </button>
         </form>
 
-        <p className="hint-bottom">
-          Masz już konto?{' '}
-          <button onClick={onSwitch} className="link-switch">Zaloguj się</button>
-        </p>
-      </div>
-    </div>
+        <footer>
+          <p className="hint-bottom">
+            Masz już konto?{' '}
+            <button type="button" onClick={onSwitch} className="link-switch">Zaloguj się</button>
+          </p>
+        </footer>
+      </section>
+    </main>
   );
 }

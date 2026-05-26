@@ -45,6 +45,9 @@ npm install
 
 # Instalacja zależności backendu
 cd server && npm install && cd ..
+
+# Konfiguracja zmiennych środowiskowych
+cp server/.env.example server/.env
 ```
 
 ## Uruchomienie
@@ -53,13 +56,12 @@ Potrzebujesz dwóch terminali:
 
 **Terminal 1 – Backend (port 3000):**
 ```bash
-cd server
-node server.js
+npm run server
 ```
 
 **Terminal 2 – Frontend (port 5173):**
 ```bash
-npx vite
+npm run dev
 ```
 
 Otwórz przeglądarkę na `http://localhost:5173`.
@@ -98,5 +100,8 @@ node scraper/job_scraper.js
 ## Testy
 
 ```bash
-node tests/api.test.js
+npm test
 ```
+
+Backend musi działać na porcie 3000. Test runner uruchamia 9 testów API
+(rejestracja, logowanie, autoryzacja, filtrowanie, integracja z Remotive, walidacja).

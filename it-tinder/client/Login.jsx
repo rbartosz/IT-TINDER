@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
+// Walidacja prawdziwym regexem (RFC 5322 uproszczony)
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
 export default function Login({ onLogin, onSwitch }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -8,7 +11,7 @@ export default function Login({ onLogin, onSwitch }) {
   const [loading, setLoading] = useState(false);
 
   const validate = () => {
-    if (!email.includes('@') || !email.includes('.')) return 'Podaj prawidłowy adres email.';
+    if (!EMAIL_REGEX.test(email)) return 'Podaj prawidłowy adres email.';
     if (password.length < 6) return 'Hasło musi mieć co najmniej 6 znaków.';
     return null;
   };
@@ -30,28 +33,37 @@ export default function Login({ onLogin, onSwitch }) {
   };
 
   return (
-    <div className="page-center">
-      <div className="card card--sm">
-        <h1 className="title">🔥 IT Tinder</h1>
-        <p className="subtitle">Zaloguj się</p>
+    <main className="page-center">
+      <section className="card card--sm" aria-labelledby="login-title">
+        <header>
+          <h1 id="login-title" className="title">🔥 IT Tinder</h1>
+          <p className="subtitle">Zaloguj się</p>
+        </header>
 
-        {error && <p className="alert-error">{error}</p>}
+        {error && <p className="alert-error" role="alert">{error}</p>}
 
-        <form onSubmit={handleSubmit} className="form-stack">
+        <form onSubmit={handleSubmit} className="form-stack" noValidate>
+          <label htmlFor="login-email" className="visually-hidden">Email</label>
           <input
+            id="login-email"
             type="email"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            autoComplete="email"
             className="input"
           />
+          <label htmlFor="login-password" className="visually-hidden">Hasło</label>
           <input
+            id="login-password"
             type="password"
             placeholder="Hasło"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            minLength={6}
+            autoComplete="current-password"
             className="input"
           />
           <button type="submit" disabled={loading} className="btn-primary">
@@ -59,11 +71,13 @@ export default function Login({ onLogin, onSwitch }) {
           </button>
         </form>
 
-        <p className="hint-bottom">
-          Nie masz konta?{' '}
-          <button onClick={onSwitch} className="link-switch">Zarejestruj się</button>
-        </p>
-      </div>
-    </div>
+        <footer>
+          <p className="hint-bottom">
+            Nie masz konta?{' '}
+            <button type="button" onClick={onSwitch} className="link-switch">Zarejestruj się</button>
+          </p>
+        </footer>
+      </section>
+    </main>
   );
 }

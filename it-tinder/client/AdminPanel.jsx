@@ -29,20 +29,22 @@ export default function AdminPanel({ token, onBack }) {
   };
 
   return (
-    <div className="page-top">
+    <main className="page-top">
       <div className="admin-container">
-        <div className="admin-header">
+        <header className="admin-header">
           <h1 className="admin-title">🛡️ Panel Admina</h1>
-          <button onClick={onBack} className="btn-secondary">← Wróć do aplikacji</button>
-        </div>
+          <nav>
+            <button onClick={onBack} className="btn-secondary">← Wróć do aplikacji</button>
+          </nav>
+        </header>
 
-        {error && <p className="alert-error">{error}</p>}
+        {error && <p className="alert-error" role="alert">{error}</p>}
 
-        <div className="admin-card">
-          <h2 className="admin-card__label">Użytkownicy ({users.length})</h2>
-          <div className="user-list">
+        <section className="admin-card" aria-labelledby="users-label">
+          <h2 id="users-label" className="admin-card__label">Użytkownicy ({users.length})</h2>
+          <ul className="user-list">
             {users.map((u) => (
-              <div key={u.id} className="user-item">
+              <li key={u.id} className="user-item">
                 <div>
                   <span className="user-item__email">{u.email}</span>
                   <span className={`user-item__role ${u.role === 'admin' ? 'role-admin' : 'role-user'}`}>
@@ -54,11 +56,11 @@ export default function AdminPanel({ token, onBack }) {
                     Usuń
                   </button>
                 )}
-              </div>
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
