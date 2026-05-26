@@ -16,12 +16,17 @@ function App() {
   const [authView, setAuthView] = useState('login');
   const [showAdmin, setShowAdmin] = useState(false);
 
-  const userRole = token ? JSON.parse(atob(token.split('.')[1])).role : null;
+  const userRole = (() => {
+    try { return token ? JSON.parse(atob(token.split('.')[1])).role : null; }
+    catch { localStorage.removeItem('token'); return null; }
+  })();
 
   const [jobs, setJobs] = useState([]);
   const [savedJobs, setSavedJobs] = useState(() => {
-    const saved = localStorage.getItem('savedJobs');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('savedJobs');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);

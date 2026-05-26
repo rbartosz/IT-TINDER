@@ -1,4 +1,5 @@
 {
+  "type": "module",
   "dependencies": {
     "@react-spring/web": "^9.7.5",
     "axios": "^1.16.0",
