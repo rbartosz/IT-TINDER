@@ -128,6 +128,33 @@ app.delete('/api/jobs/:id', authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
+
+// cache ofert z Remotive (deklaracja wczesniej bo uzywa jej /api/admin/status)
+const IT_CATEGORIES = ['software-development', 'devops', 'artificial-intelligence', 'data', 'engineering', 'product'];
+let offerCache = { data: null, ts: 0 };
+const CACHE_TTL = 5 * 60 * 1000; // 5 minut
+
+// admin: status serwera – pokazuje czy wszystko dziala
+app.get('/api/admin/status', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const dbTest = await db.get('SELECT 1 AS ok');
+    const remotiveOK = await fetch('https://remotive.com/api/remote-jobs?limit=1')
+      .then(r => r.ok).catch(() => false);
+    const cacheAge = offerCache.ts ? Math.round((Date.now() - offerCache.ts) / 1000) : null;
+    const offerCount = offerCache.data ? offerCache.data.length : 0;
+    res.json({
+      status: 'online',
+      uptime: Math.round(process.uptime()),
+      db: dbTest ? 'ok' : 'error',
+      cache: { offers: offerCount, age_sec: cacheAge },
+      remotive_api: remotiveOK ? 'ok' : 'offline',
+      memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + ' MB',
+      node: process.version,
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Blad sprawdzania statusu.' });
+  }
+});
 // admin: lista wszystkich userow (bez hasel oczywiscie!)
 app.get('/api/admin/users', authenticateToken, isAdmin, async (req, res) => {
   try {
@@ -182,52 +209,86 @@ app.get('/api/swipes/history', authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
-// integracja z zewnetrznym API Remotive - pobiera 10 najnowszych ofert programistycznych
-app.get('/api/external/jobs', async (req, res) => {
-  try {
-    const remote = await fetch(
-      'https://remotive.com/api/remote-jobs?category=software-dev&limit=10'
-    );
-    // jak Remotive padlo to lecimy z 502
-    if (!remote.ok) throw new Error(`HTTP ${remote.status}`);
-    const data = await remote.json();
-    // ich format jest gruby, mapuje na nasz uproszczony
-    const jobs = (data.jobs || []).map((j) => ({
-      id: j.id,
+// LIVE endpoint – pobiera oferty z Remotive na zywo, filtruje po tagach z prawdziwymi widełkami
+// salary jest w USD rocznie, przeliczamy na PLN miesięcznie (USD roczne * 3.8 / 12) – pobiera oferty na zywo z Remotive (cache 5 min), filtruje po tagach
+// nie wymaga logowania zeby gosc mogl zobaczyc oferty zanim zaloguje sie i zacznie swipowac
+
+function parseSalary(salaryStr) {
+  if (!salaryStr) return { min: 5000, max: 10000 };
+  const clean = salaryStr.replace(/^(OTE|up to|from)\s+/i, '').trim();
+  const nums = clean.match(/\$?([\d,.]+)\s*k?\s*[-–]\s*\$?([\d,.]+)\s*k?/);
+  if (!nums) return { min: 5000, max: 10000 };
+  let min = parseFloat(nums[1].replace(',', '.'));
+  let max = parseFloat(nums[2].replace(',', '.'));
+  if (/k/i.test(clean)) { min *= 1000; max *= 1000; }
+  if (clean.includes('/hour')) { min *= 160; max *= 160; }
+  const isHourly = salaryStr.includes("/hour"); return { min: Math.round(min * 3.8 / (isHourly ? 1 : 12)), max: Math.round(max * 3.8 / (isHourly ? 1 : 12)) };
+}
+
+async function fetchFromRemotive() {
+  // Remotive
+  const remotiveJobs = await Promise.all(
+    IT_CATEGORIES.map(cat =>
+      fetch(`https://remotive.com/api/remote-jobs?category=${cat}&limit=50`)
+        .then(r => r.json())
+        .then(d => d.jobs || [])
+        .catch(() => [])
+    )
+  ).then(results => {
+    const seen = new Set();
+    return results.flat().filter(j => {
+      if (seen.has(j.id)) return false;
+      seen.add(j.id);
+      return true;
+    }).map(j => {
+      const salary = parseSalary(j.salary);
+      return {
+        id: 'r_' + j.id,
+        title: j.title,
+        company: j.company_name,
+        salary_min: salary.min,
+        salary_max: salary.max,
+        technologies: (j.tags || []).slice(0, 5),
+        link: j.url,
+      };
+    });
+  });
+
+  // Arbeitnow (darmowe, bez klucza, 100 ofert)
+  const arbeitnowJobs = await fetch('https://www.arbeitnow.com/api/job-board-api')
+    .then(r => r.json())
+    .then(d => (d.data || []).map(j => ({
+      id: 'a_' + j.slug,
       title: j.title,
       company: j.company_name,
+      salary_min: null,
+      salary_max: null,
       technologies: (j.tags || []).slice(0, 5),
       link: j.url,
-    }));
-    res.json(jobs);
-  } catch (err) {
-    // 502 Bad Gateway = problem z zewnetrznym serwisem (nie z naszym serverem)
-    res.status(502).json({ error: 'Nie udało się pobrać danych z Remotive API.' });
-  }
-});
+    })))
+    .catch(() => []);
 
-// stary endpoint odczytujacy oferty z pliku JSON (frontend tego uzywa do filtrowania po tagach)
-// nie wymaga logowania zeby gosc moglo zobaczyc oferty zanim zaloguje sie i zacznie swipowac
-app.get('/api/oferty', (req, res) => {
-  const filePath = path.join(__dirname, 'oferty.json');
-  fs.readFile(filePath, 'utf-8', (err, data) => {
-    if (err) return res.status(500).json({ error: 'Nie udało się odczytać ofert.' });
-    try {
-      let oferty = JSON.parse(data);
-      const paramTech = req.query.tech;
-      // jak jest query ?tech=aws,docker to filtrujemy
-      if (paramTech && paramTech.trim() !== '') {
-        const wybrane = paramTech.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
-        if (wybrane.length > 0) {
-          // zostawiamy tylko oferty ktore maja chociaz jeden tag z listy
-          oferty = oferty.filter(o => (o.technologies || []).some(tag => wybrane.includes(tag.toLowerCase())));
-        }
-      }
-      res.json(oferty);
-    } catch (e) {
-      res.status(500).json({ error: 'Nieprawidłowy format JSON.' });
+  return [...remotiveJobs, ...arbeitnowJobs];
+}
+
+app.get('/api/oferty', async (req, res) => {
+  try {
+    // cache 5-minutowy
+    if (!offerCache.data || Date.now() - offerCache.ts > CACHE_TTL) {
+      offerCache = { data: await fetchFromRemotive(), ts: Date.now() };
     }
-  });
+    let oferty = offerCache.data;
+    const paramTech = req.query.tech;
+    if (paramTech && paramTech.trim() !== '') {
+      const wybrane = paramTech.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+      if (wybrane.length > 0) {
+        oferty = oferty.filter(o => (o.technologies || []).some(tag => wybrane.includes(tag.toLowerCase())));
+      }
+    }
+    res.json(oferty);
+  } catch (e) {
+    res.status(502).json({ error: 'Nie uda\u0142o si\u0119 pobra\u0107 ofert.' });
+  }
 });
 
 // inicjalizacja bazy i odpalenie servera

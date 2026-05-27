@@ -632,3 +632,13 @@ li.job-card__tag {
   width: 100%;
   margin-top: 0.75rem;
 }
+
+/* Status dashboard */
+.status-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+.status-item { background: #1e293b; border-radius: 0.5rem; padding: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
+.status-item__label { font-size: 0.9rem; color: #ffffff; font-weight: 600; }
+.status-item__value { font-size: 0.95rem; font-weight: 700; color: #ffffff; display: flex; align-items: center; gap: 0.4rem; }
+.status-dot { width: 8px; height: 8px; border-radius: 9999px; display: inline-block; flex-shrink: 0; }
+.status-ok { background: #22c55e; }
+.status-err { background: #ef4444; }
+@media (max-width: 500px) { .status-grid { grid-template-columns: 1fr; } }

@@ -83,16 +83,7 @@ async function main() {
     if (res.status !== 403) throw new Error(`oczekiwano 403, dostalem ${res.status}`);
   });
 
-  // sprawdzam czy zewnetrzne api Remotive odpowiada
-  await test('GET /api/external/jobs – Remotive', async () => {
-    const res = await fetch(`${BASE}/api/external/jobs`);
-    if (res.status !== 200) throw new Error(`status ${res.status}`);
-    const data = await res.json();
-    if (!Array.isArray(data)) throw new Error('odpowiedz nie jest tablica');
-    if (data.length === 0) throw new Error('pusta odpowiedz z API');
-  });
-
-  // walidacja po stronie servera - bez hasla ma byc 400
+  // walidacja po stronie servera - bez hasla ma byc 400 - bez hasla ma byc 400
   await test('POST /api/auth/register – brak hasła = 400', async () => {
     const res = await fetch(`${BASE}/api/auth/register`, {
       method: 'POST',

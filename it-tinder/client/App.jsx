@@ -39,7 +39,6 @@ function App() {
   const [isProfileSet, setIsProfileSet] = useState(false); // czy user wybral juz technologie
   const [selectedTechs, setSelectedTechs] = useState([]);  // jakie technologie zaznaczyl
   const [noResults, setNoResults] = useState(false);
-  const [externalLoading, setExternalLoading] = useState(false);   // ladowanie z Remotive
 
   // useMemo zeby react nie liczyl tego od nowa przy kazdym render
   // .reverse() bo TinderCard rysuje od konca do poczatku stosu
@@ -75,47 +74,12 @@ function App() {
     finally { setIsLoading(false); }
   };
 
-  // Lab 14: integracja frontend ↔ zewnetrzne API (Remotive)
-  // przycisk "pobierz oferty z internetu" - zamiast bazy lokalnej leci do Remotive
-  const handleFetchExternal = async () => {
-    setExternalLoading(true);
-    setNoResults(false);
-    try {
-      // tu uzywam fetch (nie axios) zeby pokazac ze umiem oba sposoby
-      const res = await fetch('http://localhost:3000/api/external/jobs');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      // mapuje na format ktorego oczekuje moja karta - dorzucam fake widelki bo Remotive nie podaje
-      const mapped = data.map((j) => ({
-        id: `ext-${j.id}`,                                 // prefix zeby nie zderzyc sie z lokalnymi id
-        title: j.title,
-        company: j.company,
-        salary_min: 5000,
-        salary_max: 12000,
-        technologies: j.technologies || [],
-        link: j.link,
-      }));
-      if (mapped.length === 0) {
-        setNoResults(true);
-      } else {
-        setJobs(mapped);
-        setIsProfileSet(true);
-        toast.success(`Pobrano ${mapped.length} ofert z Remotive`);
-      }
-    } catch (err) {
-      toast.error('Nie udało się pobrać ofert z Remotive API');
-    } finally {
-      setExternalLoading(false);
-    }
-  };
-
   // funkcja wywolywana przez TinderCard po przesunieciu karty
   const onSwipe = (direction, job) => {
     if (direction === 'right') {
       // prawo = polubione, dodaje do zapisanych
       setSavedJobs((prev) => [...prev, job]);
       // zapisuje swipe na backendzie - tylko dla ofert z bazy (id liczbowe)
-      // oferty z Remotive maja id w stylu "ext-123" wiec ich nie zapisuje
       if (typeof job.id === 'number') {
         fetch('http://localhost:3000/api/swipes', {
           method: 'POST',
@@ -198,20 +162,10 @@ function App() {
                 </svg>
                 Ładowanie...
               </span>
-            ) : 'Rozpocznij szukanie (z bazy)'}
+            ) : 'Szukaj'}
           </button>
 
-          {/* drugi przycisk - laczy sie z zewnetrznym API Remotive (wymog Lab 14) */}
-          <button
-            type="button"
-            onClick={handleFetchExternal}
-            disabled={externalLoading}
-            className="btn-outline btn-external"
-          >
-            {externalLoading ? 'Pobieranie...' : '🌍 Pobierz oferty z Remotive (zewnętrzne API)'}
-          </button>
-
-          {selectedTechs.length === 0 && <p className="hint">Zaznacz przynajmniej jedną technologię (lub pobierz oferty zewnętrzne)</p>}
+                {selectedTechs.length === 0 && <p className="hint">Zaznacz przynajmniej jedną technologię </p>}
         </section>
       </main>
     );

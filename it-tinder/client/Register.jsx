@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
-// ten sam regex co w Login.jsx - duplikacja troche slabo, ale dla 2 plikow nie ma sensu kombinowac
+// regex
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export default function Register({ onSwitch }) {
