@@ -642,3 +642,72 @@ li.job-card__tag {
 .status-ok { background: #22c55e; }
 .status-err { background: #ef4444; }
 @media (max-width: 500px) { .status-grid { grid-template-columns: 1fr; } }
+
+
+/* Layout: karty wycentrowane, filtry jako overlay */
+.main-layout { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 900px; margin: 0 auto; position: relative; }
+
+.btn-filters-toggle {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 1000;
+  padding: 0.6rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid #334155;
+  background: rgba(15, 23, 42, 0.95);
+  color: #f8fafc;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+.btn-filters-toggle:hover { background: rgba(30, 41, 59, 0.95); }
+
+.filter-panel--overlay {
+  position: fixed;
+  top: 3.5rem;
+  left: 1rem;
+  z-index: 999;
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.filter-panel {
+  background: rgba(15, 23, 42, 0.97);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  min-width: 220px;
+  max-width: 240px;
+  border: 1px solid #334155;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+.filter-panel__title { font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 1rem; }
+.filter-panel__count { font-size: 0.85rem; color: #94a3b8; margin-top: 1rem; }
+
+.filter-section { border: none; padding: 0; margin: 0 0 1rem 0; }
+.filter-section__label { font-size: 0.85rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.5rem; display: block; }
+
+.checkbox-item--small { font-size: 0.8rem; padding: 0.2rem 0; }
+
+.salary-inputs { display: flex; flex-direction: column; gap: 0.5rem; }
+.salary-field { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #cbd5e1; }
+.salary-field input {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.4rem;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 0.8rem;
+}
+.salary-field span { min-width: 24px; }
+
+@media (max-width: 700px) {
+  .filter-panel { max-width: calc(100vw - 2rem); }
+}
