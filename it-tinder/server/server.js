@@ -79,7 +79,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/jobs', authenticateToken, async (req, res) => {
   try {
     const jobs = await db.all('SELECT * FROM jobs');
-    res.json(jobs);
+    res.json(jobs.map(j => ({ ...j, technologies: JSON.parse(j.technologies || '[]') })));
   } catch (err) {
     res.status(500).json({ error: 'Błąd serwera.' });
   }
@@ -273,21 +273,26 @@ async function fetchFromRemotive() {
 
 app.get('/api/oferty', async (req, res) => {
   try {
-    // cache 5-minutowy
+    // cache 5-minutowy - pobiera z API i zapisuje do bazy
     if (!offerCache.data || Date.now() - offerCache.ts > CACHE_TTL) {
-      offerCache = { data: await fetchFromRemotive(), ts: Date.now() };
-    }
-    let oferty = offerCache.data;
-    const paramTech = req.query.tech;
-    if (paramTech && paramTech.trim() !== '') {
-      const wybrane = paramTech.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
-      if (wybrane.length > 0) {
-        oferty = oferty.filter(o => (o.technologies || []).some(tag => wybrane.includes(tag.toLowerCase())));
+      const offers = await fetchFromRemotive();
+      // upsert do bazy
+      for (const o of offers) {
+        await db.run(
+          `INSERT INTO jobs (external_id, title, company, technologies, salary_min, salary_max, link)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(external_id) DO UPDATE SET title=excluded.title, company=excluded.company,
+           technologies=excluded.technologies, salary_min=excluded.salary_min, salary_max=excluded.salary_max, link=excluded.link`,
+          [o.id, o.title, o.company, JSON.stringify(o.technologies), o.salary_min, o.salary_max, o.link]
+        );
       }
+      offerCache = { data: offers, ts: Date.now() };
     }
-    res.json(oferty);
+    // zwraca z bazy
+    const jobs = await db.all('SELECT * FROM jobs');
+    res.json(jobs.map(j => ({ ...j, technologies: JSON.parse(j.technologies || '[]') })));
   } catch (e) {
-    res.status(502).json({ error: 'Nie uda\u0142o si\u0119 pobra\u0107 ofert.' });
+    res.status(502).json({ error: 'Nie udało się pobrać ofert.' });
   }
 });
 
@@ -302,6 +307,21 @@ async function main() {
   });
   // wczytuje schema.sql i odpala go - tworzy tabelki jak jeszcze nie ma
   const schema = await fs.promises.readFile(path.join(__dirname, 'schema.sql'), 'utf-8');
+
+  // migracja - dodaj kolumny jesli nie istnieja (dla istniejacych baz)
+  // musi byc PRZED schema.sql bo schema tworzy indeksy na nowych kolumnach
+  const cols = await db.all("PRAGMA table_info(jobs)").catch(() => []);
+  if (cols.length > 0) {
+    const colNames = cols.map(c => c.name);
+    if (!colNames.includes('external_id')) await db.exec('ALTER TABLE jobs ADD COLUMN external_id TEXT');
+    if (!colNames.includes('salary_min')) await db.exec('ALTER TABLE jobs ADD COLUMN salary_min INTEGER');
+    if (!colNames.includes('salary_max')) await db.exec('ALTER TABLE jobs ADD COLUMN salary_max INTEGER');
+    if (!colNames.includes('link')) await db.exec('ALTER TABLE jobs ADD COLUMN link TEXT');
+    // upewnij sie ze indeks external_id jest UNIQUE
+    await db.exec('DROP INDEX IF EXISTS idx_jobs_external_id');
+    await db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_external_id ON jobs(external_id)');
+  }
+
   await db.exec(schema);
 
   // seed - tworzy konto admina przy pierwszym uruchomieniu
@@ -313,6 +333,24 @@ async function main() {
   }
 
   console.log('Baza danych gotowa.');
+
+  // przy starcie pobierz oferty z API i zapisz do bazy
+  try {
+    const offers = await fetchFromRemotive();
+    for (const o of offers) {
+      await db.run(
+        `INSERT INTO jobs (external_id, title, company, technologies, salary_min, salary_max, link)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(external_id) DO UPDATE SET title=excluded.title, company=excluded.company,
+         technologies=excluded.technologies, salary_min=excluded.salary_min, salary_max=excluded.salary_max, link=excluded.link`,
+        [o.id, o.title, o.company, JSON.stringify(o.technologies), o.salary_min, o.salary_max, o.link]
+      );
+    }
+    offerCache = { data: offers, ts: Date.now() };
+    console.log(`Zaladowano ${offers.length} ofert do bazy.`);
+  } catch (e) {
+    console.log('Nie udalo sie pobrac ofert z API:', e.message);
+  }
 
   const server = http.createServer(app);
   server.listen(PORT, () => {

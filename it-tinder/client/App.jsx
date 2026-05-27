@@ -37,11 +37,11 @@ function App() {
   const [salaryMin, setSalaryMin] = useState(0);
   const [salaryMax, setSalaryMax] = useState(50000);
 
-  // po zalogowaniu od razu pobierz wszystkie oferty
+  // po zalogowaniu od razu pobierz wszystkie oferty z bazy
   useEffect(() => {
     if (!token) return;
     setIsLoading(true);
-    axios.get('http://localhost:3000/api/oferty')
+    axios.get('http://localhost:3000/api/jobs', { headers: { Authorization: `Bearer ${token}` } })
       .then(res => setAllJobs(res.data))
       .catch(err => console.error('Blad pobierania ofert:', err))
       .finally(() => setIsLoading(false));

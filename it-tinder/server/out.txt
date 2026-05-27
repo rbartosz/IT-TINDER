@@ -1,0 +1,3 @@
+Baza danych gotowa.
+Zaladowano 115 ofert do bazy.
+Serwer działa na porcie 3000 – http://localhost:3000

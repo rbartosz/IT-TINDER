@@ -2,3 +2,5 @@
 **/.commandcode/
 dist/
 **/.env
+server/database.db
+server/oferty.json
