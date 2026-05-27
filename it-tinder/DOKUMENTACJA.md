@@ -1,232 +1,186 @@
 # Dokumentacja techniczna – IT Tinder
 
 **Przedmiot:** Programowanie Aplikacji Internetowych
-**Repozytorium:** `PROJEKT_LABY`
 
 ---
 
 ## 1. Opis aplikacji
 
-**IT Tinder** to aplikacja webowa pozwalająca przeglądać oferty pracy IT w formacie inspirowanym
-aplikacją Tinder – użytkownik widzi pojedynczą ofertę, którą może *przesunąć w prawo* (zapisać do
-ulubionych) lub *w lewo* (pominąć). Aplikacja jest skierowana do osób szukających pracy
-w branży IT, które chcą szybko przefiltrować rynek bez przewijania długich list.
+IT Tinder to aplikacja webowa do przeglądania ofert pracy w IT. Pomysł jest prosty – zamiast scrollować nieskończone listy ofert, użytkownik przegląda je pojedynczo w formie kart (jak w Tinderze). Swipe w prawo zapisuje ofertę, w lewo pomija.
 
-**Główne funkcjonalności:**
+Aplikacja pobiera oferty z dwóch zewnętrznych API (Remotive i Arbeitnow), zapisuje je do lokalnej bazy SQLite i serwuje użytkownikom. Zalogowany user może filtrować oferty po technologiach i zakresie wynagrodzenia. Admin ma osobny panel do zarządzania użytkownikami i podglądu statusu serwera.
 
-- Rejestracja i logowanie użytkowników (hasła hashowane bcryptem, sesja oparta o JWT).
-- Konfiguracja profilu – wybór technologii, którymi użytkownik jest zainteresowany.
-- Filtrowanie ofert z lokalnej bazy po tagach technologicznych.
-- Pobieranie aktualnych ofert z zewnętrznego API **Remotive**.
-- Mechanika swipe (zapisanie / pominięcie) z trwałym zapisem polubień w bazie.
-- Lista zapisanych ofert z bezpośrednim linkiem do aplikowania.
-- Panel administratora – zarządzanie kontami użytkowników, dodawanie / edycja / usuwanie ofert.
-- Dwie role: `user` i `admin` z rozdzielonymi uprawnieniami.
+Główne funkcje:
+- rejestracja/logowanie (JWT + bcrypt)
+- swipowanie ofert pracy z animacją kart
+- filtrowanie po technologiach i widełkach
+- zapisywanie polubionych ofert z linkiem do aplikowania
+- panel admina (lista userów, usuwanie kont, status serwera)
+- automatyczne pobieranie ofert z zewnętrznych API przy starcie
 
 ---
 
-## 2. Architektura systemu
+## 2. Architektura
 
 ```
-┌──────────────────┐         HTTPS/JSON          ┌──────────────────┐
-│   PRZEGLĄDARKA   │ ◄─────────────────────────► │     BACKEND      │
-│  React + Vite    │   fetch / axios (async)     │  Express (Node)  │
-│  (client/)       │                             │  (server/)       │
-└──────────────────┘                             └────────┬─────────┘
-                                                          │
-                                          ┌───────────────┼─────────────────┐
-                                          ▼                                 ▼
-                                  ┌───────────────┐                ┌─────────────────┐
-                                  │   SQLite DB   │                │  Remotive API   │
-                                  │ database.db   │                │ (zewnętrzne)    │
-                                  └───────────────┘                └─────────────────┘
+┌──────────────────┐       HTTP/JSON (async)      ┌──────────────────┐
+│   PRZEGLĄDARKA   │ ◄──────────────────────────► │     BACKEND      │
+│  React + Vite    │    axios / fetch             │  Express (Node)  │
+│  port 5173       │                              │  port 3000       │
+└──────────────────┘                              └────────┬─────────┘
+                                                           │
+                                           ┌───────────────┼───────────────┐
+                                           ▼                               ▼
+                                   ┌───────────────┐              ┌────────────────┐
+                                   │   SQLite DB   │              │ Zewnętrzne API │
+                                   │ database.db   │              │ Remotive       │
+                                   └───────────────┘              │ Arbeitnow      │
+                                                                  └────────────────┘
 ```
 
-**Warstwy:**
-
-| Warstwa             | Technologie                                      | Odpowiedzialność |
-|---------------------|--------------------------------------------------|------------------|
-| Frontend            | React 18, Vite, axios, react-tinder-card, react-hot-toast | UI, walidacja po stronie klienta, swipe, komunikacja z API |
-| Backend             | Node.js, Express 5, JWT, bcrypt, dotenv          | REST API, autoryzacja, walidacja serwerowa, integracja z DB i Remotive |
-| Baza danych         | SQLite (lokalny plik `database.db`)              | Trwałe przechowywanie użytkowników, ofert i polubień |
-| Zewnętrzne API      | Remotive Jobs API                                | Aktualne oferty pracy zdalnej |
+| Warstwa | Technologie | Co robi |
+|---------|-------------|---------|
+| Frontend | React 18, Vite, axios, react-tinder-card | Interfejs, swipowanie, walidacja formularzy |
+| Backend | Node.js, Express, JWT, bcrypt | REST API, autoryzacja, pobieranie ofert |
+| Baza danych | SQLite | Przechowywanie userów, ofert i swipów |
+| Zewnętrzne API | Remotive, Arbeitnow | Źródło ofert pracy (pobierane przy starcie serwera) |
 
 ---
 
-## 3. Struktura bazy danych
+## 3. Baza danych
 
-Plik `server/schema.sql` zawiera pełen skrypt tworzący strukturę. Trzy tabele z relacjami:
+Schemat w pliku `server/schema.sql`. Trzy tabele połączone kluczami obcymi:
 
-### Tabela `users`
+### users
 
-| Kolumna   | Typ                 | Opis                                |
-|-----------|---------------------|-------------------------------------|
-| id        | INTEGER PK AUTO     | Identyfikator użytkownika           |
-| email     | TEXT UNIQUE NOT NULL | Email (loginem)                    |
-| password  | TEXT NOT NULL       | Hasło zhashowane bcryptem           |
-| role      | TEXT DEFAULT 'user' | Rola: `user` albo `admin`           |
+| Kolumna | Typ | Opis |
+|---------|-----|------|
+| id | INTEGER PK | — |
+| email | TEXT UNIQUE | login użytkownika |
+| password | TEXT | hash bcrypt |
+| role | TEXT | `user` lub `admin` |
 
-Indeks: `idx_users_email` na kolumnie `email`.
+### jobs
 
-### Tabela `jobs`
+| Kolumna | Typ | Opis |
+|---------|-----|------|
+| id | INTEGER PK | — |
+| external_id | TEXT UNIQUE | id z API (żeby nie duplikować) |
+| title | TEXT | nazwa stanowiska |
+| company | TEXT | firma |
+| technologies | TEXT | tagi jako JSON array |
+| salary_min | INTEGER | dolna widełka (PLN/mies.) |
+| salary_max | INTEGER | górna widełka |
+| link | TEXT | URL do oferty |
+| description | TEXT | opis (opcjonalny) |
+| location | TEXT | lokalizacja |
 
-| Kolumna       | Typ                 | Opis                            |
-|---------------|---------------------|---------------------------------|
-| id            | INTEGER PK AUTO     | Identyfikator oferty            |
-| title         | TEXT NOT NULL       | Tytuł stanowiska                |
-| company       | TEXT                | Nazwa firmy                     |
-| description   | TEXT                | Opis oferty                     |
-| technologies  | TEXT                | Lista technologii (CSV)         |
-| location      | TEXT                | Lokalizacja                     |
-| salary        | TEXT                | Widełki płacowe                 |
+### swipes
 
-Indeks: `idx_jobs_company` na kolumnie `company` (często używana do filtrowania).
+| Kolumna | Typ | Opis |
+|---------|-----|------|
+| id | INTEGER PK | — |
+| user_id | INTEGER FK → users | kto swipował |
+| job_id | INTEGER FK → jobs | którą ofertę |
+| status | TEXT | `liked` / `disliked` |
 
-### Tabela `swipes`
+Relacja: `users (1) ──< swipes >── (1) jobs`
 
-| Kolumna  | Typ                | Opis                                    |
-|----------|--------------------|-----------------------------------------|
-| id       | INTEGER PK AUTO    | Identyfikator polubienia                |
-| user_id  | INTEGER NOT NULL FK → users(id) | Użytkownik, który zaswipował |
-| job_id   | INTEGER NOT NULL FK → jobs(id)  | Oferta, której dotyczy       |
-| status   | TEXT NOT NULL      | `liked` / `disliked`                    |
+Indeksy: `email` (logowanie), `company` (filtrowanie), `external_id` (upsert), `user_id` (historia swipów).
 
-Indeks: `idx_swipes_user_id` na kolumnie `user_id`.
-
-**Relacje (klucze obce):**
-
-```
-users (1) ──< swipes >── (1) jobs
-```
-
-Endpoint `GET /api/swipes/history` używa JOIN-a po obu kluczach obcych, by pokazać adminowi
-historię polubień razem z emailem użytkownika i tytułem oferty.
+Endpoint `/api/swipes/history` robi JOIN po obu kluczach obcych żeby admin widział kto co polubił.
 
 ---
 
-## 4. Opis API (REST)
+## 4. Endpointy API
 
-Wszystkie odpowiedzi w formacie JSON. Autoryzacja przez nagłówek `Authorization: Bearer <token>`.
+Odpowiedzi zawsze w JSON. Token w nagłówku `Authorization: Bearer <token>`.
 
-| Metoda  | Ścieżka                       | Auth   | Opis                                         |
-|---------|-------------------------------|--------|----------------------------------------------|
-| POST    | `/api/auth/register`          | —      | Rejestracja nowego użytkownika               |
-| POST    | `/api/auth/login`             | —      | Logowanie, zwraca JWT                        |
-| GET     | `/api/oferty`                 | —      | Lista ofert z pliku JSON, filtr `?tech=`     |
-| GET     | `/api/jobs`                   | user   | Lista ofert z bazy SQLite                    |
-| POST    | `/api/jobs`                   | admin  | Dodanie nowej oferty                         |
-| PUT     | `/api/jobs/:id`               | admin  | Aktualizacja oferty                          |
-| DELETE  | `/api/jobs/:id`               | admin  | Usunięcie oferty                             |
-| POST    | `/api/swipes`                 | user   | Zapis swipe'u (`liked` / `disliked`)         |
-| GET     | `/api/swipes/history`         | admin  | Historia swipe'ów z JOIN po users + jobs     |
-| GET     | `/api/admin/users`            | admin  | Lista wszystkich użytkowników                |
-| DELETE  | `/api/admin/users/:id`        | admin  | Usunięcie użytkownika                        |
-| GET     | `/api/external/jobs`          | —      | Pobranie ofert z zewnętrznego Remotive API   |
+| Metoda | Ścieżka | Auth | Opis |
+|--------|---------|------|------|
+| POST | `/api/auth/register` | — | rejestracja |
+| POST | `/api/auth/login` | — | logowanie, zwraca JWT |
+| GET | `/api/oferty` | — | pobiera oferty z API, zapisuje do bazy, zwraca wszystkie |
+| GET | `/api/jobs` | token | lista ofert z bazy |
+| POST | `/api/jobs` | admin | dodanie oferty |
+| PUT | `/api/jobs/:id` | admin | edycja oferty |
+| DELETE | `/api/jobs/:id` | admin | usunięcie oferty |
+| POST | `/api/swipes` | token | zapis swipa |
+| GET | `/api/swipes/history` | admin | historia swipów (JOIN) |
+| GET | `/api/admin/users` | admin | lista userów |
+| DELETE | `/api/admin/users/:id` | admin | usunięcie usera |
+| GET | `/api/admin/status` | admin | status serwera (uptime, db, pamięć) |
 
-**Kody statusów:** `200 OK`, `201 Created`, `400 Bad Request` (walidacja), `401 Unauthorized`
-(brak / zły token), `403 Forbidden` (brak uprawnień admina), `404 Not Found`, `500 Internal Server Error`,
-`502 Bad Gateway` (problem z zewnętrznym API).
+Kody: 200, 201, 400 (walidacja), 401 (brak tokena), 403 (brak uprawnień), 404, 500, 502 (błąd API).
 
-### Przykład: rejestracja
+### Przykład – rejestracja
 
-**Request:**
-
-```http
+```
 POST /api/auth/register
-Content-Type: application/json
+{ "email": "jan@example.com", "password": "mojehaslo123" }
 
-{ "email": "jan@example.com", "password": "tajneHaslo123" }
+→ 201: { "message": "Zarejestrowano pomyślnie." }
+→ 400: { "error": "Email już istnieje." }
 ```
 
-**Response 201:**
+### Przykład – logowanie
 
-```json
-{ "message": "Zarejestrowano pomyślnie." }
 ```
-
-**Response 400 (email zajęty):**
-
-```json
-{ "error": "Email już istnieje." }
-```
-
-### Przykład: logowanie
-
-**Request:**
-
-```http
 POST /api/auth/login
-Content-Type: application/json
+{ "email": "jan@example.com", "password": "mojehaslo123" }
 
-{ "email": "jan@example.com", "password": "tajneHaslo123" }
+→ 200: { "token": "eyJhbGciOi..." }
 ```
 
-**Response 200:**
+### Przykład – pobranie ofert
 
-```json
-{ "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." }
 ```
-
-### Przykład: lista ofert (chroniona)
-
-**Request:**
-
-```http
 GET /api/jobs
 Authorization: Bearer eyJhbGciOi...
-```
 
-**Response 200:**
-
-```json
-[
-  { "id": 1, "title": "Backend Dev", "company": "Acme", "technologies": "node,sql", ... }
-]
+→ 200: [{ "id": 1, "title": "Backend Dev", "company": "Acme", "salary_min": 15000, ... }]
 ```
 
 ---
 
-## 5. Instrukcja uruchomienia
+## 5. Uruchomienie
 
-**Wymagania:** Node.js ≥ 18, npm.
+Potrzebne: Node.js >= 18, npm.
 
 ```bash
-# 1. Klon repozytorium
-git clone https://github.com/rbartosz/PROJEKT_LABY.git
-cd PROJEKT_LABY/it-tinder
-
-# 2. Instalacja zależności
+# instalacja
 npm install
 cd server && npm install && cd ..
 
-# 3. Konfiguracja środowiska
+# konfiguracja
 cp server/.env.example server/.env
-# (wartości domyślne wystarczą do dev; w produkcji zmień JWT_SECRET)
 
-# 4a. Terminal 1 – backend (port 3000)
-npm run server
+# terminal 1 – backend
+cd server && node server.js
 
-# 4b. Terminal 2 – frontend (port 5173)
-npm run dev
-
-# 5. Otwórz przeglądarkę
-# http://localhost:5173
+# terminal 2 – frontend
+npx vite
 ```
 
-**Konto admina (seedowane automatycznie przy pierwszym starcie):**
+Aplikacja dostępna pod `http://localhost:5173`.
 
-- Email: `root@root.pl`
-- Hasło: `rootroot`
+Konto admina tworzy się automatycznie:
+- email: `root@root.pl`
+- hasło: `rootroot`
 
 ---
 
-## 6. Raport z testów
+## 6. Testy
 
-Testy uruchamia się komendą `npm test` (przy działającym backendzie na porcie 3000):
+Uruchomienie (backend musi działać):
 
 ```
-$ npm test
+npm test
+```
 
+Wynik:
+
+```
 Testy API IT Tinder
 
   ✓ POST /api/auth/register – rejestracja
@@ -236,37 +190,10 @@ Testy API IT Tinder
   ✓ GET /api/jobs – brak autoryzacji = 401
   ✓ GET /api/jobs – z tokenem
   ✓ GET /api/swipes/history – bez admina = 403
-  ✓ GET /api/external/jobs – Remotive
   ✓ POST /api/auth/register – brak hasła = 400
+  ✓ GET /api/swipes/history – bez admina = 403
 
 Wyniki: 9 zaliczone, 0 błędów
 ```
 
-**Pokrycie testowe:** 9 testów obejmujących: rejestrację, logowanie, listę ofert, filtrowanie,
-ochronę endpointów, autoryzację rolą, integrację z zewnętrznym API i walidację serwerową.
-Wymóg projektowy (≥ 5 testów) został przekroczony.
-
----
-
-## 7. Mapowanie wymagań projektowych
-
-| Wymaganie wg specyfikacji                                              | Realizacja                                  |
-|------------------------------------------------------------------------|---------------------------------------------|
-| Struktura katalogów `client/ server/ tests/`                           | `it-tinder/`                                |
-| Repozytorium Git z historią                                            | GitHub: `rbartosz/PROJEKT_LABY`             |
-| README.md z instrukcją                                                 | `README.md` + `it-tinder/README.md`         |
-| Semantyczny HTML5                                                      | `<main>`, `<header>`, `<section>`, `<article>`, `<nav>`, `<footer>`, `<fieldset>` |
-| CSS Flexbox/Grid + responsywność                                       | `client/styles.css` + media queries 768/480 |
-| JS: zdarzenia, dynamiczny DOM, walidacja formularzy                    | React + regex email + min. długość hasła    |
-| REST API ≥ 4 endpointy CRUD                                            | `/api/jobs` GET/POST/PUT/DELETE + auth + admin/users + swipes (12 endpointów) |
-| Statusy HTTP, JSON, walidacja serwerowa                                | 200/201/400/401/403/404/500/502             |
-| ≥ 3 tabele z PK i FK                                                   | `users`, `jobs`, `swipes`                   |
-| JOIN i indeks                                                          | `/api/swipes/history` + 3 indeksy           |
-| `schema.sql`                                                           | `server/schema.sql`                         |
-| Rejestracja / logowanie z bcryptem                                     | `bcrypt.hash` w `/api/auth/register`        |
-| Sesja                                                                  | JWT z 24h ważnością                         |
-| Role user/admin + chronione endpointy                                  | Middleware `authenticateToken` + `isAdmin`  |
-| `fetch` + `async/await`                                                | Frontend axios + fetch w `App.jsx`          |
-| Integracja z publicznym zewnętrznym API                                | Remotive (`/api/external/jobs` + przycisk frontendu) |
-| ≥ 5 testów jednostkowych (`npm test`)                                  | 9 testów w `tests/api.test.js`              |
-| `.env` (nie w kodzie) + `.env.example`                                 | `server/.env` (gitignored) + `server/.env.example` |
+Testy sprawdzają: rejestrację, logowanie, pobieranie ofert, filtrowanie, ochronę endpointów tokenem, autoryzację rolą admina i walidację danych wejściowych.
