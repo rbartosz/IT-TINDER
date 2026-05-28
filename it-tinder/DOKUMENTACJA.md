@@ -1,6 +1,4 @@
-# Dokumentacja techniczna – IT Tinder
-
-**Przedmiot:** Programowanie Aplikacji Internetowych
+# Dokumentacja
 
 ---
 
@@ -172,7 +170,7 @@ Konto admina tworzy się automatycznie:
 
 ## 6. Testy
 
-Uruchomienie (backend musi działać):
+Testy jednostkowe logiki serwerowej. **Nie wymagają uruchomionego backendu** — testują izolowane funkcje z mockowanymi obiektami req/res.
 
 ```
 npm test
@@ -181,19 +179,23 @@ npm test
 Wynik:
 
 ```
-Testy API IT Tinder
+parseSalary:
+  ✓ parseSalary – null zwraca domyślne wartości
+  ✓ parseSalary – parsuje zakres z "k"
 
-  ✓ POST /api/auth/register – rejestracja
-  ✓ POST /api/auth/login – logowanie
-  ✓ GET /api/oferty – lista ofert
-  ✓ GET /api/oferty?tech=aws – filtrowanie
-  ✓ GET /api/jobs – brak autoryzacji = 401
-  ✓ GET /api/jobs – z tokenem
-  ✓ GET /api/swipes/history – bez admina = 403
-  ✓ POST /api/auth/register – brak hasła = 400
-  ✓ GET /api/swipes/history – bez admina = 403
+authenticateToken:
+  ✓ authenticateToken – brak nagłówka Authorization zwraca 401
+  ✓ authenticateToken – nieprawidłowy token zwraca 403
+  ✓ authenticateToken – prawidłowy token wywołuje next()
 
-Wyniki: 9 zaliczone, 0 błędów
+isAdmin:
+  ✓ isAdmin – user bez roli admin dostaje 403
+  ✓ isAdmin – admin przechodzi dalej (next)
+
+Wyniki: 7 zaliczone, 0 błędów
 ```
 
-Testy sprawdzają: rejestrację, logowanie, pobieranie ofert, filtrowanie, ochronę endpointów tokenem, autoryzację rolą admina i walidację danych wejściowych.
+Co testujemy:
+- **parseSalary** — funkcja przeliczająca wynagrodzenia z USD na PLN (obsługa null, format "k")
+- **authenticateToken** — middleware JWT (brak tokena, zły token, prawidłowy token)
+- **isAdmin** — middleware sprawdzający rolę admina (user vs admin)
