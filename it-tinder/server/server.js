@@ -359,7 +359,13 @@ async function main() {
 }
 
 // jak cos sie wywali przy starcie to exit zeby ladnie umrzec
-main().catch(err => {
-  console.error('Błąd startu serwera:', err);
-  process.exit(1);
-});
+// odpala serwer tylko gdy plik jest uruchomiony bezposrednio (nie przez require w testach)
+if (require.main === module) {
+  main().catch(err => {
+    console.error('Błąd startu serwera:', err);
+    process.exit(1);
+  });
+}
+
+// eksport funkcji do testow jednostkowych
+module.exports = { parseSalary, authenticateToken, isAdmin, JWT_SECRET };
