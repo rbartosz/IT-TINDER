@@ -65,7 +65,8 @@ function App() {
   }, [allJobs, swipedIds, selectedTechs, salaryMin, salaryMax]);
 
   const remainingJobs = useMemo(() => filteredJobs.slice().reverse(), [filteredJobs]);
-  const childRefs = useMemo(() => remainingJobs.map(() => React.createRef()), [remainingJobs]);
+  const visibleJobs = useMemo(() => remainingJobs.slice(-5), [remainingJobs]);
+  const childRefs = useMemo(() => visibleJobs.map(() => React.createRef()), [visibleJobs]);
 
   useEffect(() => { localStorage.setItem('savedJobs', JSON.stringify(savedJobs)); }, [savedJobs]);
 
@@ -191,7 +192,7 @@ function App() {
               <p className="empty-state__text">Ładowanie ofert...</p>
             </div>
           ) : remainingJobs.length > 0 ? (
-            remainingJobs.map((job, index) => (
+            visibleJobs.map((job, index) => (
               <TinderCard key={job.id} ref={childRefs[index]} onSwipe={(dir) => onSwipe(dir, job)}
                 preventSwipe={['up', 'down']} swipeRequirementType="position" className="swipe-card">
                 <article className="job-card">

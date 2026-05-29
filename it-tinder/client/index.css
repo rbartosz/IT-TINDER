@@ -1,2 +1,1 @@
-/* tylko import, calosc styli siedzi w styles.css */
-@import "./styles.css";
+/* style importowane bezposrednio w main.jsx */

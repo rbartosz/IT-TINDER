@@ -17,10 +17,8 @@ it-tinder/
 ├── server/             # Backend Express + SQLite
 │   ├── server.js       # Serwer REST API (port 3000)
 │   ├── schema.sql      # Schemat bazy danych
-│   └── oferty.json     # Oferty pracy (dane)
-├── scraper/            # Pobieranie ofert z Remotive API
-│   └── job_scraper.js  # Node.js scraper
-├── tests/              # Testy
+│   └── .env.example    # Przykładowa konfiguracja
+├── tests/              # Testy API
 ├── index.html          # Entry point Vite
 ├── vite.config.js      # Konfiguracja Vite
 └── package.json        # Zależności frontendowe
@@ -30,37 +28,31 @@ it-tinder/
 
 - **Frontend:** React, Vite, axios, react-tinder-card
 - **Backend:** Express, SQLite, bcrypt, JWT
-- **Zewnętrzne API:** Remotive (pobieranie ofert pracy)
+- **Zewnętrzne API:** Remotive, Arbeitnow (pobieranie ofert pracy na żywo)
 
 ## Wymagania
 
 - Node.js >= 18
 - npm
 
-## Instalacja
+## Instalacja i uruchomienie
 
 ```bash
-# Instalacja zależności frontendu
+# 1. Instalacja zależności frontendu
 npm install
 
-# Instalacja zależności backendu
-cd server && npm install && cd ..
+# 2. Instalacja zależności backendu
+cd server
+npm install
 
-# Konfiguracja zmiennych środowiskowych
-cp server/.env.example server/.env
-```
+# 3. Konfiguracja zmiennych środowiskowych
+copy .env.example .env
+cd ..
 
-## Uruchomienie
-
-Potrzebujesz dwóch terminali:
-
-**Terminal 1 – Backend (port 3000):**
-```bash
+# 4. Uruchomienie backendu (terminal 1)
 npm run server
-```
 
-**Terminal 2 – Frontend (port 5173):**
-```bash
+# 5. Uruchomienie frontendu (terminal 2)
 npm run dev
 ```
 
@@ -73,13 +65,17 @@ Podczas pierwszego uruchomienia backend automatycznie tworzy konto administrator
 - **Email:** `root@root.pl`
 - **Hasło:** `rootroot`
 
+## Pobieranie ofert
+
+Serwer automatycznie pobiera oferty pracy z zewnętrznych API (Remotive, Arbeitnow) przy starcie oraz odświeża je co 5 minut. Nie wymaga osobnej konfiguracji.
+
 ## API Endpoints
 
 | Metoda | Ścieżka | Opis | Auth |
 |--------|---------|------|------|
 | POST | `/api/auth/register` | Rejestracja | ❌ |
 | POST | `/api/auth/login` | Logowanie (zwraca JWT) | ❌ |
-| GET | `/api/oferty` | Lista ofert (filtrowanie ?tech=) | ❌ |
+| GET | `/api/oferty` | Lista ofert (z zewnętrznych API + baza) | ❌ |
 | GET | `/api/jobs` | Lista ofert z bazy | token |
 | POST | `/api/jobs` | Dodaj ofertę | admin |
 | PUT | `/api/jobs/:id` | Edytuj ofertę | admin |
@@ -87,15 +83,7 @@ Podczas pierwszego uruchomienia backend automatycznie tworzy konto administrator
 | GET | `/api/admin/users` | Lista użytkowników | admin |
 | DELETE | `/api/admin/users/:id` | Usuń użytkownika | admin |
 | POST | `/api/swipes` | Zapisz swipe | token |
-| GET | `/api/external/jobs` | Oferty z Remotive API | ❌ |
-
-## Scraper
-
-Pobiera oferty z Remotive API i zapisuje do `server/oferty.json`:
-
-```bash
-node scraper/job_scraper.js
-```
+| GET | `/api/swipes/history` | Historia swipów (JOIN) | admin |
 
 ## Testy
 
@@ -103,5 +91,4 @@ node scraper/job_scraper.js
 npm test
 ```
 
-Backend musi działać na porcie 3000. Test runner uruchamia 9 testów API
-(rejestracja, logowanie, autoryzacja, filtrowanie, integracja z Remotive, walidacja).
+Backend musi działać na porcie 3000. Test runner uruchamia 9 testów API (rejestracja, logowanie, autoryzacja, filtrowanie, integracja z Remotive, walidacja).
