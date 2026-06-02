@@ -1,3 +1,4 @@
+// konfiga vite + plugin do reacta, nic wiecej
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 

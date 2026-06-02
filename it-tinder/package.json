@@ -6,7 +6,7 @@
     "build": "vite build",
     "server": "cd server && node server.js",
     "scraper": "node scraper/job_scraper.js",
-    "test": "node tests/api.test.js"
+    "test": "node tests/api.test.cjs"
   },
   "dependencies": {
     "@react-spring/web": "^9.7.5",

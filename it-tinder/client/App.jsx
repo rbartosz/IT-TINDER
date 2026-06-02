@@ -1,3 +1,4 @@
+// glowny komponent aplikacji - po zalogowaniu od razu swipowanie z filtrami
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import TinderCard from 'react-tinder-card';
@@ -21,21 +22,51 @@ function App() {
     catch { localStorage.removeItem('token'); return null; }
   })();
 
-  const [jobs, setJobs] = useState([]);
+  const [allJobs, setAllJobs] = useState([]);             // wszystkie oferty z API
+  const [swipedIds, setSwipedIds] = useState(new Set());  // id ofert juz swipowanych
   const [savedJobs, setSavedJobs] = useState(() => {
-    try {
-      const saved = localStorage.getItem('savedJobs');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
+    try { return JSON.parse(localStorage.getItem('savedJobs')) || []; }
+    catch { return []; }
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isProfileSet, setIsProfileSet] = useState(false);
-  const [selectedTechs, setSelectedTechs] = useState([]);
-  const [noResults, setNoResults] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const remainingJobs = useMemo(() => jobs.slice().reverse(), [jobs]);
-  const childRefs = useMemo(() => remainingJobs.map(() => React.createRef()), [remainingJobs]);
+  // filtry
+  const [selectedTechs, setSelectedTechs] = useState([]);
+  const [salaryMin, setSalaryMin] = useState(0);
+  const [salaryMax, setSalaryMax] = useState(50000);
+
+  // po zalogowaniu od razu pobierz wszystkie oferty z bazy
+  useEffect(() => {
+    if (!token) return;
+    setIsLoading(true);
+    axios.get('http://localhost:3000/api/jobs', { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => setAllJobs(res.data))
+      .catch(err => console.error('Blad pobierania ofert:', err))
+      .finally(() => setIsLoading(false));
+  }, [token]);
+
+  // filtrowanie ofert na biezaco (bez swipowanych)
+  const filteredJobs = useMemo(() => {
+    return allJobs.filter(job => {
+      if (swipedIds.has(job.id)) return false;
+      // filtr technologii - jesli cos zaznaczone, oferta musi miec przynajmniej jeden tag
+      if (selectedTechs.length > 0) {
+        const jobTechs = (job.technologies || []).map(t => t.toLowerCase());
+        if (!selectedTechs.some(t => jobTechs.includes(t.toLowerCase()))) return false;
+      }
+      // filtr wynagrodzenia
+      if (job.salary_min != null && job.salary_max != null) {
+        if (job.salary_max < salaryMin || job.salary_min > salaryMax) return false;
+      }
+      return true;
+    });
+  }, [allJobs, swipedIds, selectedTechs, salaryMin, salaryMax]);
+
+  const remainingJobs = useMemo(() => filteredJobs.slice().reverse(), [filteredJobs]);
+  const visibleJobs = useMemo(() => remainingJobs.slice(-5), [remainingJobs]);
+  const childRefs = useMemo(() => visibleJobs.map(() => React.createRef()), [visibleJobs]);
 
   useEffect(() => { localStorage.setItem('savedJobs', JSON.stringify(savedJobs)); }, [savedJobs]);
 
@@ -43,28 +74,20 @@ function App() {
   const handleLogout = () => { localStorage.removeItem('token'); setToken(null); };
 
   const handleCheckboxChange = (tech) => {
-    setSelectedTechs((prev) => prev.includes(tech) ? prev.filter((t) => t !== tech) : [...prev, tech]);
-  };
-
-  const handleStartSearch = async () => {
-    if (selectedTechs.length === 0) return;
-    setIsLoading(true);
-    setNoResults(false);
-    try {
-      const techQuery = selectedTechs.join(',');
-      const res = await axios.get(
-        `http://localhost:3000/api/oferty?tech=${encodeURIComponent(techQuery)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (res.data.length === 0) { setNoResults(true); setJobs([]); }
-      else { setJobs(res.data); setIsProfileSet(true); }
-    } catch (err) { console.error('Błąd pobierania ofert:', err); }
-    finally { setIsLoading(false); }
+    setSelectedTechs(prev => prev.includes(tech) ? prev.filter(t => t !== tech) : [...prev, tech]);
   };
 
   const onSwipe = (direction, job) => {
+    setSwipedIds(prev => new Set(prev).add(job.id));
     if (direction === 'right') {
-      setSavedJobs((prev) => [...prev, job]);
+      setSavedJobs(prev => [...prev, job]);
+      if (typeof job.id === 'number') {
+        fetch('http://localhost:3000/api/swipes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ job_id: job.id, status: 'liked' }),
+        }).catch(() => {});
+      }
       toast(
         (t) => (
           <div className="toast-content">
@@ -78,18 +101,18 @@ function App() {
         { duration: 5000 }
       );
     }
-    setJobs((prev) => prev.filter((j) => j.id !== job.id));
   };
 
-  const handleDeleteOne = (jobId) => { setSavedJobs((prev) => prev.filter((j) => j.id !== jobId)); };
+  const handleDeleteOne = (jobId) => { setSavedJobs(prev => prev.filter(j => j.id !== jobId)); };
   const handleDeleteAll = () => { setSavedJobs([]); };
 
   const formatSalary = (min, max) => {
+    if (min == null || max == null) return 'Brak danych';
     const f = new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN', minimumFractionDigits: 0, maximumFractionDigits: 0 });
     return `${f.format(min)} – ${f.format(max)}`;
   };
 
-  // Auth screens
+  // ===== logowanie =====
   if (!token) {
     return authView === 'login'
       ? <Login onLogin={handleLogin} onSwitch={() => setAuthView('register')} />
@@ -100,90 +123,104 @@ function App() {
     return <AdminPanel token={token} onBack={() => setShowAdmin(false)} />;
   }
 
-  // Profile config screen
-  if (!isProfileSet) {
-    return (
-      <div className="page-center">
-        <Toaster position="top-center" toastOptions={{ style: { borderRadius: '12px', padding: '12px 16px' } }} />
-        <div className="card">
-          <h1 className="title">🔥 IT Tinder</h1>
-          <p className="subtitle subtitle--wide">Konfiguracja profilu</p>
-
-          <div className="checkbox-list">
-            <p className="section-label">Wybierz technologie, które Cię interesują:</p>
-            {DOSTEPNE_TECHNOLOGIE.map((tech) => (
-              <label key={tech} className="checkbox-item">
-                <input type="checkbox" checked={selectedTechs.includes(tech)} onChange={() => handleCheckboxChange(tech)} />
-                <span>{tech}</span>
-              </label>
-            ))}
-          </div>
-
-          {noResults && <p className="alert-warning">Brak ofert dla wybranych technologii. Spróbuj innych.</p>}
-
-          <button onClick={handleStartSearch} disabled={selectedTechs.length === 0 || isLoading} className="btn-primary">
-            {isLoading ? (
-              <span className="spinner">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <circle opacity="0.25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path opacity="0.75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Ładowanie...
-              </span>
-            ) : 'Rozpocznij szukanie'}
-          </button>
-
-          {selectedTechs.length === 0 && <p className="hint">Zaznacz przynajmniej jedną technologię</p>}
-        </div>
-      </div>
-    );
-  }
-
-  // Main swipe view
+  // ===== glowny widok: filtry + karty =====
   return (
-    <div className="page-top">
+    <main className="page-top">
       <Toaster position="top-center" toastOptions={{ style: { borderRadius: '12px', padding: '12px 16px' } }} />
 
-      <h1 className="title title--lg">🔥 IT Tinder</h1>
-      <p className="subtitle">Przesuń w prawo, aby zapisać · Przesuń w lewo, aby pominąć</p>
+      <header>
+        <h1 className="title title--lg">🔥 IT Tinder</h1>
+        <p className="subtitle">Przesuń w prawo, aby zapisać · Przesuń w lewo, aby pominąć</p>
+      </header>
 
-      <div className="header-bar">
+      <nav className="header-bar" aria-label="Akcje użytkownika">
         {userRole === 'admin' && (
           <button onClick={() => setShowAdmin(true)} className="btn-admin">🛡️ Admin</button>
         )}
         <button onClick={handleLogout} className="btn-secondary">Wyloguj</button>
-      </div>
+      </nav>
 
-      <div className="card-stack">
-        {remainingJobs.length > 0 ? (
-          remainingJobs.map((job, index) => (
-            <TinderCard key={job.id} ref={childRefs[index]} onSwipe={(dir) => onSwipe(dir, job)}
-              preventSwipe={['up', 'down']} swipeRequirementType="position" className="swipe-card">
-              <div className="job-card">
-                <div>
-                  <h2 className="job-card__title">{job.title}</h2>
-                  <p className="job-card__company">{job.company}</p>
-                  <p className="job-card__salary">{formatSalary(job.salary_min, job.salary_max)}</p>
-                  <div className="job-card__tags">
-                    {job.technologies.map((tech) => (
-                      <span key={tech} className="job-card__tag">{tech}</span>
-                    ))}
-                  </div>
-                </div>
-                <div className="job-card__footer">
-                  <span>Swipe ➡️ aby zapisać</span>
-                  <span>⬅️ aby pominąć</span>
-                </div>
+      <div className="main-layout">
+        {/* przycisk toggle filtrow */}
+        <button onClick={() => setFiltersOpen(prev => !prev)} className="btn-filters-toggle">
+          🔍 Filtry {selectedTechs.length > 0 && `(${selectedTechs.length})`}
+        </button>
+
+        {/* wysuwany panel filtrow */}
+        {filtersOpen && (
+          <aside className="filter-panel filter-panel--overlay">
+            <h2 className="filter-panel__title">Filtry</h2>
+
+            <fieldset className="filter-section">
+              <legend className="filter-section__label">Technologie</legend>
+              {DOSTEPNE_TECHNOLOGIE.map(tech => (
+                <label key={tech} className="checkbox-item checkbox-item--small">
+                  <input type="checkbox" checked={selectedTechs.includes(tech)} onChange={() => handleCheckboxChange(tech)} />
+                  <span>{tech}</span>
+                </label>
+              ))}
+            </fieldset>
+
+            <fieldset className="filter-section">
+              <legend className="filter-section__label">Wynagrodzenie (PLN/mies.)</legend>
+              <div className="salary-inputs">
+                <label className="salary-field">
+                  <span>Od</span>
+                  <input type="number" value={salaryMin} onChange={e => setSalaryMin(Number(e.target.value))} min={0} step={1000} />
+                </label>
+                <label className="salary-field">
+                  <span>Do</span>
+                  <input type="number" value={salaryMax} onChange={e => setSalaryMax(Number(e.target.value))} min={0} step={1000} />
+                </label>
               </div>
-            </TinderCard>
-          ))
-        ) : (
-          <div className="empty-state">
-            <span className="empty-state__icon">🎉</span>
-            <p className="empty-state__title">To już wszystkie oferty na dziś!</p>
-            <p className="empty-state__text">Masz {savedJobs.length} zapisanych ofert w przeglądarce.</p>
-          </div>
+            </fieldset>
+
+            <p className="filter-panel__count">Pasujących ofert: {filteredJobs.length}</p>
+          </aside>
         )}
+
+        {/* stos kart */}
+        <section className="card-stack" aria-label="Stos ofert pracy">
+          {isLoading ? (
+            <div className="empty-state">
+              <span className="spinner spinner--large">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle opacity="0.25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path opacity="0.75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              </span>
+              <p className="empty-state__text">Ładowanie ofert...</p>
+            </div>
+          ) : remainingJobs.length > 0 ? (
+            visibleJobs.map((job, index) => (
+              <TinderCard key={job.id} ref={childRefs[index]} onSwipe={(dir) => onSwipe(dir, job)}
+                preventSwipe={['up', 'down']} swipeRequirementType="position" className="swipe-card">
+                <article className="job-card">
+                  <div>
+                    <h2 className="job-card__title">{job.title}</h2>
+                    <p className="job-card__company">{job.company}</p>
+                    <p className="job-card__salary">{formatSalary(job.salary_min, job.salary_max)}</p>
+                    <ul className="job-card__tags">
+                      {(job.technologies || []).map(tech => (
+                        <li key={tech} className="job-card__tag">{tech}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <footer className="job-card__footer">
+                    <span>Swipe ➡️ aby zapisać</span>
+                    <span>⬅️ aby pominąć</span>
+                  </footer>
+                </article>
+              </TinderCard>
+            ))
+          ) : (
+            <div className="empty-state">
+              <span className="empty-state__icon" aria-hidden="true">🎉</span>
+              <p className="empty-state__title">To już wszystkie oferty!</p>
+              <p className="empty-state__text">Masz {savedJobs.length} zapisanych ofert. Zmień filtry żeby zobaczyć więcej.</p>
+            </div>
+          )}
+        </section>
       </div>
 
       <button onClick={() => setIsModalOpen(true)} className="btn-outline">
@@ -191,22 +228,22 @@ function App() {
       </button>
 
       {isModalOpen && (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}>
-          <div className="modal">
-            <div className="modal__header">
-              <h2 className="modal__title">Twoje ulubione oferty</h2>
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="saved-modal-title"
+          onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}>
+          <section className="modal">
+            <header className="modal__header">
+              <h2 id="saved-modal-title" className="modal__title">Twoje ulubione oferty</h2>
               <div className="modal__actions">
                 {savedJobs.length > 0 && (
                   <button onClick={handleDeleteAll} className="btn-delete-all">Usuń wszystkie</button>
                 )}
-                <button onClick={() => setIsModalOpen(false)} className="btn-close">✕</button>
+                <button onClick={() => setIsModalOpen(false)} className="btn-close" aria-label="Zamknij">✕</button>
               </div>
-            </div>
-
+            </header>
             {savedJobs.length > 0 ? (
-              <div className="saved-list">
-                {savedJobs.map((job) => (
-                  <div key={job.id} className="saved-item">
+              <ul className="saved-list">
+                {savedJobs.map(job => (
+                  <li key={job.id} className="saved-item">
                     <div className="saved-item__info">
                       <h3 className="saved-item__title">{job.title}</h3>
                       <p className="saved-item__company">{job.company}</p>
@@ -214,21 +251,21 @@ function App() {
                     </div>
                     <div className="saved-item__actions">
                       <a href={job.link} target="_blank" rel="noopener noreferrer" className="btn-apply">Aplikuj</a>
-                      <button onClick={() => handleDeleteOne(job.id)} className="btn-remove" title="Usuń ofertę">✕</button>
+                      <button onClick={() => handleDeleteOne(job.id)} className="btn-remove" title="Usuń ofertę" aria-label="Usuń ofertę">✕</button>
                     </div>
-                  </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
             ) : (
               <div className="empty-state">
-                <span className="empty-state__icon">💔</span>
+                <span className="empty-state__icon" aria-hidden="true">💔</span>
                 <p className="empty-state__text">Nie masz jeszcze żadnych zapisanych ofert. Przesuwaj karty w prawo!</p>
               </div>
             )}
-          </div>
+          </section>
         </div>
       )}
-    </div>
+    </main>
   );
 }
 
