@@ -1,4 +1,4 @@
-# PROJEKT_LABY – IT Tinder
+IT Tinder
 
 Aplikacja webowa w stylu Tindera, ale do ofert pracy IT – przesuwasz w prawo, żeby zapisać ofertę,
 w lewo, żeby pominąć. Filtrujesz po technologiach, logujesz się, a admin zarządza użytkownikami i ofertami.
